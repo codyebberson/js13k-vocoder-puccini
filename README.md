@@ -7,13 +7,15 @@ Highly compressed version of [Vocoder Puccini](https://dittytoy.net/ditty/6f30b0
 Tools
 
 - [TypeScript](https://www.typescriptlang.org/)
-- [Vite](https://vitejs.dev/) dev server
-- [Rollup](https://rollupjs.org/guide/en/) production build
-- [Google Closure Compiler](https://github.com/google/closure-compiler) - best JS minifier
-- [Roadroller](https://lifthrasiir.github.io/roadroller/) - best JS compressor
-- [Efficient Compression Tool](https://github.com/fhanau/Efficient-Compression-Tool) - best ZIP
+- [Vite](https://vitejs.dev/)
+- [Rollup](https://rollupjs.org/guide/en/)
+- [Google Closure Compiler](https://github.com/google/closure-compiler)
+- [Roadroller](https://lifthrasiir.github.io/roadroller/)
+- [Efficient Compression Tool](https://github.com/fhanau/Efficient-Compression-Tool)
 
 By [JS13K](https://js13kgames.com/) rules, the zip file is 2126 bytes.
+
+See [js13k-starter-2022](https://github.com/codyebberson/js13k-starter-2022) for more details.
 
 ## License
 
