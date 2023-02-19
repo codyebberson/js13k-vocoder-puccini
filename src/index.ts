@@ -45,20 +45,9 @@ function dbamp(dB: number): number {
 
 const TWOPI = 2 * Math.PI;
 
-class Smoother {
-  v: number;
-  a0: number;
-
-  // We feed values to this object, and it smoothes them out
-  constructor(v: number, dur = 0.07) {
-    this.v = v;
-    this.a0 = clamp01(dt / dur);
-  }
-
-  update(target: number): number {
-    // should be called once per sample
-    return (this.v += this.a0 * (target - this.v));
-  }
+function smoother(v: number, dur = 0.07): (target: number) => number {
+  const a0 = clamp01(dt / dur);
+  return (target: number) => (v += a0 * (target - v));
 }
 
 function playFormant(ns: number): void {
@@ -76,11 +65,11 @@ function playFormant(ns: number): void {
 
   let phase = 0;
   const freq = midi_to_hz(nn2);
-  const freqsmoo = new Smoother(freq);
-  const ffreqsmoo = new Smoother(ffreq);
-  const ampsmoo = new Smoother(dbamp(ampdb));
-  const bwsmoo = new Smoother(bw);
-  const smoo_note = new Smoother(c3, 0.1);
+  const freqsmoo = smoother(freq);
+  const ffreqsmoo = smoother(ffreq);
+  const ampsmoo = smoother(dbamp(ampdb));
+  const bwsmoo = smoother(bw);
+  const smoo_note = smoother(c3, 0.1);
   const formratio = ffreq / freq;
   let k = Math.floor(formratio);
   let q = formratio - k;
@@ -100,12 +89,12 @@ function playFormant(ns: number): void {
     const end = ((lastnote + durs[i]) * sampleRate) | 0;
     while (s < end) {
       const t = Math.max(0, s / sampleRate);
-      const note = smoo_note.update(nn2) + clamp01(t - lastnote - 0.5) * (0.5 * Math.sin(4.7 * TWOPI * t));
+      const note = smoo_note(nn2) + clamp01(t - lastnote - 0.5) * (0.5 * Math.sin(4.7 * TWOPI * t));
 
       // Movable ring modulation as explained here:
       // http://msp.ucsd.edu/techniques/latest/book-html/node95.html
-      const freq2 = freqsmoo.update(midi_to_hz(note));
-      const ffreq2 = ffreqsmoo.update(ffreq);
+      const freq2 = freqsmoo(midi_to_hz(note));
+      const ffreq2 = ffreqsmoo(ffreq);
       const dphase = TWOPI * freq2 * dt;
       phase += dphase;
       if (phase > TWOPI) {
@@ -118,11 +107,11 @@ function playFormant(ns: number): void {
       }
       const carrier = (1 - q) * Math.cos(k * phase) + q * Math.cos((k + 1) * phase);
 
-      const bw2 = bwsmoo.update(bw);
+      const bw2 = bwsmoo(bw);
       const b = bw2 / freq2;
       const a = 0.5 * b * b;
       const modulator = 1 / (1 + a * (1 - Math.cos(phase)));
-      const amp = ampsmoo.update(dbamp(ampdb));
+      const amp = ampsmoo(dbamp(ampdb));
       const env = envelope(attack, decay, sustain, release, duration, t);
       const value = 0.3 * carrier * modulator * amp * env;
       data[0][s] += value;
@@ -166,30 +155,18 @@ function playVarsaw(start: number, decay: number, duration: number, note: number
   }
 }
 
-function playVarsawNotes(notes: number[], durations: number[], pan: number): void {
+function playVarsawNotes(chords: number[] | number[][], durations: number[], pan: number): void {
   let t = 0;
-  for (let i = 0; t < totalLengthInSeconds; i++) {
-    if (i < notes.length) {
-      if (notes[i]) {
-        playVarsaw(t, Math.min(1, durations[i] - 0.2), durations[i], notes[i], pan);
+  for (let i = 0; i < chords.length; i++) {
+    let array = chords[i];
+    if (array) {
+      if (!Array.isArray(array)) {
+        array = [array];
+      }
+      for (let j = 0; j < array.length; j++) {
+        playVarsaw(t, Math.min(1, durations[i] - 0.2), durations[i], array[j], pan);
       }
       t += durations[i];
-    } else {
-      t++;
-    }
-  }
-}
-
-function playVarsawChords(chords: number[][], durations: number[], pan: number): void {
-  let t = 0;
-  for (let i = 0; t < totalLengthInSeconds; i++) {
-    if (i < chords.length) {
-      for (let j = 0; j < chords[i].length; j++) {
-        playVarsaw(t, Math.min(1, durations[i] - 0.2), durations[i], chords[i][j], pan);
-      }
-      t += durations[i];
-    } else {
-      t++;
     }
   }
 }
@@ -201,7 +178,7 @@ playVarsawNotes(bsnn, bsdur, 0.6);
 playVarsawNotes(clnn, cldur, 0.4);
 
 // Violins
-playVarsawChords(rhnn, rhdur, -0.3);
+playVarsawNotes(rhnn, rhdur, -0.3);
 
 // Viola
-playVarsawChords(innn, indur, -0.2);
+playVarsawNotes(innn, indur, -0.2);
