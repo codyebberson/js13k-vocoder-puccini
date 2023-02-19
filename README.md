@@ -4,7 +4,7 @@
 
 Prerecorded:
 
-https://cody.ebberson.com/js13k-vocoder-puccini/demo.mp4
+https://user-images.githubusercontent.com/749094/219980260-24e63e94-8f46-4e21-bf18-53d22130b1a1.mp4
 
 (Cover art by [MidJourney](https://midjourney.com/))
 
