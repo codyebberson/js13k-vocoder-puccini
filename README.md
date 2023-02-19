@@ -13,7 +13,7 @@ Tools
 - [Roadroller](https://lifthrasiir.github.io/roadroller/) - best JS compressor
 - [Efficient Compression Tool](https://github.com/fhanau/Efficient-Compression-Tool) - best ZIP
 
-By [JS13K](https://js13kgames.com/) rules, the zip file is 2231 bytes.
+By [JS13K](https://js13kgames.com/) rules, the zip file is 2126 bytes.
 
 ## License
 
