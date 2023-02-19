@@ -71,7 +71,7 @@ function playFormant(ns: number): void {
   const bwsmoo = smoother(bw);
   const smoo_note = smoother(c3, 0.1);
   const formratio = ffreq / freq;
-  let k = Math.floor(formratio);
+  let k = formratio | 0;
   let q = formratio - k;
   let s = 0;
 
@@ -88,7 +88,7 @@ function playFormant(ns: number): void {
 
     const end = ((lastnote + durs[i]) * sampleRate) | 0;
     while (s < end) {
-      const t = Math.max(0, s / sampleRate);
+      const t = s / sampleRate;
       const note = smoo_note(nn2) + clamp01(t - lastnote - 0.5) * (0.5 * Math.sin(4.7 * TWOPI * t));
 
       // Movable ring modulation as explained here:
@@ -102,7 +102,7 @@ function playFormant(ns: number): void {
         // End of one period
         // We can change the formant ratio now!
         const formratio = ffreq2 / freq2;
-        k = Math.floor(formratio);
+        k = formratio | 0;
         q = formratio - k;
       }
       const carrier = (1 - q) * Math.cos(k * phase) + q * Math.cos((k + 1) * phase);

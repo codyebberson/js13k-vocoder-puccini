@@ -21,7 +21,7 @@ Tools
 - [Roadroller](https://lifthrasiir.github.io/roadroller/)
 - [Efficient Compression Tool](https://github.com/fhanau/Efficient-Compression-Tool)
 
-By [JS13K](https://js13kgames.com/) rules, the zip file is 2079 bytes.
+By [JS13K](https://js13kgames.com/) rules, the zip file is 2012 bytes.
 
 See [js13k-starter-2022](https://github.com/codyebberson/js13k-starter-2022) for more details.
 
