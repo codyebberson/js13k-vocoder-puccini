@@ -1,216 +1,216 @@
-/* eslint-disable no-sparse-arrays */
-import { initKeys, keys, KEY_A, KEY_D, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_S, KEY_UP, KEY_W, updateKeys } from './keys';
-import { initMouse, mouse, updateMouse } from './mouse';
-import { music } from './music';
-import { zzfx, zzfxP } from './zzfx';
+import { c3, clamp01, midi_to_hz } from './ditty';
+import { envelope } from './env';
+import { bsdur, bsnn, cldur, clnn, durs, indur, innn, nn, rhdur, rhnn, table, totaldur, vowels } from './formant';
 
-const WIDTH = 240;
-const HEIGHT = 135;
-const MILLIS_PER_SECOND = 1000;
-const FRAMES_PER_SECOND = 30;
-const MILLIS_PER_FRAME = MILLIS_PER_SECOND / FRAMES_PER_SECOND;
-const ENTITY_TYPE_PLAYER = 0;
-const ENTITY_TYPE_BULLET = 1;
-const ENTITY_TYPE_SNAKE = 2;
-const ENTITY_TYPE_SPIDER = 3;
-const PLAYER_SPEED = 2;
-const BULLET_SPEED = 4;
-const SPIDER_SPEED = 1;
+(document.getElementById('b') as HTMLButtonElement).addEventListener('click', init);
 
-interface Entity {
-  readonly entityType: number;
-  x: number;
-  y: number;
-  dx: number;
-  dy: number;
-  health: number;
-  cooldown: number;
-  aggro?: boolean;
-  shooter?: Entity;
+const ctx = new AudioContext();
+
+const sampleRate = ctx.sampleRate;
+
+const length = sampleRate * 0.75;
+const impulse = ctx.createBuffer(2, length, sampleRate);
+const impulseL = impulse.getChannelData(0);
+const impulseR = impulse.getChannelData(1);
+const decay = 1.1;
+for (let i = 0; i < length; i++) {
+  impulseL[i] = 0.5 * (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+  impulseR[i] = 0.5 * (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
 }
 
-const canvas = document.querySelector('#c') as HTMLCanvasElement;
-const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
+const convolver = ctx.createConvolver();
+convolver.buffer = impulse;
+convolver.connect(ctx.destination);
 
-const image = new Image();
-image.src = 'i.png';
+const dt = 1 / sampleRate;
 
-const entities: Entity[] = [];
+const totalLengthInSeconds = 60;
 
-const player = createEntity(ENTITY_TYPE_PLAYER, 16, 64);
+const totalLengthInSamples = totalLengthInSeconds * sampleRate;
 
-for (let i = 0; i < 5; i++) {
-  randomEnemy();
+const audioBuffer = ctx.createBuffer(2, totalLengthInSamples, sampleRate);
+
+const data = [audioBuffer.getChannelData(0), audioBuffer.getChannelData(1)];
+
+function init(): void {
+  const source = ctx.createBufferSource();
+  source.buffer = audioBuffer;
+  source.connect(convolver);
+  source.start();
 }
 
-let score = 0;
-let musicStarted = false;
-
-initKeys(canvas);
-initMouse(canvas);
-
-function createEntity(entityType: number, x: number, y: number, dx = 0, dy = 0): Entity {
-  const e = {
-    entityType,
-    x,
-    y,
-    dx,
-    dy,
-    health: 100,
-    cooldown: 0,
-  };
-  entities.push(e);
-  return e;
+function dbamp(dB: number): number {
+  return 10 ** (dB / 20);
 }
 
-function randomEnemy(): void {
-  const entityType = Math.random() < 0.5 ? ENTITY_TYPE_SNAKE : ENTITY_TYPE_SPIDER;
-  const x = Math.floor(64 + Math.random() * (WIDTH - 64));
-  const y = Math.floor(Math.random() * HEIGHT);
-  createEntity(entityType, x, y);
-}
+const TWOPI = 2 * Math.PI;
 
-function gameLoop(): void {
-  if (Math.random() < 0.01) {
-    randomEnemy();
-  }
-  updateKeys();
-  updateMouse();
-  handleInput();
-  ai();
-  collisionDetection();
-  render();
-}
+class Smoother {
+  v: number;
+  a0: number;
 
-function handleInput(): void {
-  if (!musicStarted && mouse.buttons[0].down) {
-    musicStarted = true;
-    zzfxP(...music).loop = true;
+  // We feed values to this object, and it smoothes them out
+  constructor(v: number, dur = 0.07) {
+    this.v = v;
+    this.a0 = clamp01(dt / dur);
   }
-  if (keys[KEY_UP].down || keys[KEY_W].down) {
-    player.y -= PLAYER_SPEED;
-  }
-  if (keys[KEY_LEFT].down || keys[KEY_A].down) {
-    player.x -= PLAYER_SPEED;
-  }
-  if (keys[KEY_DOWN].down || keys[KEY_S].down) {
-    player.y += PLAYER_SPEED;
-  }
-  if (keys[KEY_RIGHT].down || keys[KEY_D].down) {
-    player.x += PLAYER_SPEED;
-  }
-  if (mouse.buttons[0].down) {
-    const targetX = (mouse.x / canvas.offsetWidth) * WIDTH;
-    const targetY = (mouse.y / canvas.offsetHeight) * HEIGHT;
-    shoot(player, targetX, targetY, true);
+
+  update(target: number): number {
+    // should be called once per sample
+    return (this.v += this.a0 * (target - this.v));
   }
 }
 
-function shoot(shooter: Entity, targetX: number, targetY: number, sound = false): void {
-  if (shooter.cooldown <= 0) {
-    const dist = Math.hypot(targetX - shooter.x, targetY - shooter.y);
-    const bullet = createEntity(
-      ENTITY_TYPE_BULLET,
-      shooter.x,
-      shooter.y,
-      ((targetX - shooter.x) / dist) * BULLET_SPEED,
-      ((targetY - shooter.y) / dist) * BULLET_SPEED
-    );
-    bullet.shooter = shooter;
-    shooter.cooldown = 10;
-    if (sound) {
-      zzfx(...[, , 90, , 0.01, 0.03, 4, , , , , , , 9, 50, 0.2, , 0.2, 0.01]);
-    }
-  }
-}
+function playFormant(ns: number): void {
+  const attack = 0.1;
+  const decay = 0;
+  const sustain = 1;
+  const duration = totaldur;
+  const release = 0.1;
 
-function ai(): void {
-  for (let i = entities.length - 1; i >= 0; i--) {
-    const entity = entities[i];
-    entity.x += entity.dx;
-    entity.y += entity.dy;
-    entity.cooldown--;
+  let nn2 = nn[0];
+  let ffreq = table[vowels[0]].freq[ns];
+  let bw = table[vowels[0]].bw[ns];
+  let ampdb = -60;
+  let lastnote = 0;
 
-    if (entity.entityType === ENTITY_TYPE_SNAKE) {
-      snakeAi(entity);
-    }
+  let phase = 0;
+  const freq = midi_to_hz(nn2);
+  const freqsmoo = new Smoother(freq);
+  const ffreqsmoo = new Smoother(ffreq);
+  const ampsmoo = new Smoother(dbamp(ampdb));
+  const bwsmoo = new Smoother(bw);
+  const smoo_note = new Smoother(c3, 0.1);
+  const formratio = ffreq / freq;
+  let k = Math.floor(formratio);
+  let q = formratio - k;
+  let s = 0;
 
-    if (entity.entityType === ENTITY_TYPE_SPIDER) {
-      spiderAi(entity);
-    }
-
-    // Clear out dead entities
-    if (entity.health <= 0) {
-      entities.splice(i, 1);
-    }
-  }
-}
-
-function snakeAi(snake: Entity): void {
-  if (distance(snake, player) < 64) {
-    shoot(snake, player.x, player.y);
-  }
-}
-
-function spiderAi(spider: Entity): void {
-  if (spider.aggro) {
-    if (spider.x < player.x) {
-      spider.x += SPIDER_SPEED;
-    } else if (spider.x > player.x) {
-      spider.x -= SPIDER_SPEED;
-    }
-    if (spider.y < player.y) {
-      spider.y += SPIDER_SPEED;
-    } else if (spider.y > player.y) {
-      spider.y -= SPIDER_SPEED;
-    }
-  } else if (distance(spider, player) < 64) {
-    spider.aggro = true;
-  }
-}
-
-function collisionDetection(): void {
-  for (const entity of entities) {
-    for (const other of entities) {
-      if (entity !== other && distance(entity, other) < 8) {
-        if (
-          entity.entityType === ENTITY_TYPE_BULLET &&
-          other.entityType !== ENTITY_TYPE_BULLET &&
-          other !== entity.shooter
-        ) {
-          entity.health = 0; // Kill the bullet
-          other.health -= 20; // Damage the target
-          if (other.health <= 0) {
-            zzfx(...[1.01, , 368, 0.01, 0.1, 0.3, 4, 0.31, , , , , , 1.7, , 0.4, , 0.46, 0.1]);
-            if (entity.shooter === player) {
-              score += 100;
-            }
-          }
-        }
+  for (let i = 0; i < nn.length; i++) {
+    nn2 = nn[i];
+    if (vowels[i] !== 'r') {
+      if (!vowels[i]) {
+        console.log('CODY missing vowels[i]');
       }
+      if (!table[vowels[i]]) {
+        console.log('CODY missing table[vowels[i]]', i, vowels[i]);
+      }
+      if (!table[vowels[i]].freq) {
+        console.log('CODY missing table[vowels[i]].freq');
+      }
+      ffreq = table[vowels[i]].freq[ns];
+      bw = table[vowels[i]].bw[ns];
+    }
+    ampdb = table[vowels[i]].amp[ns];
+    if (i > 0) {
+      lastnote += durs[i - 1];
+    }
+
+    const end = ((lastnote + durs[i]) * sampleRate) | 0;
+    while (s < end) {
+      const t = Math.max(0, s / sampleRate);
+      const note = smoo_note.update(nn2) + clamp01(t - lastnote - 0.5) * (0.5 * Math.sin(4.7 * TWOPI * t));
+
+      // Movable ring modulation as explained here:
+      // http://msp.ucsd.edu/techniques/latest/book-html/node95.html
+      const freq2 = freqsmoo.update(midi_to_hz(note));
+      const ffreq2 = ffreqsmoo.update(ffreq);
+      const dphase = TWOPI * freq2 * dt;
+      phase += dphase;
+      if (phase > TWOPI) {
+        phase -= TWOPI;
+        // End of one period
+        // We can change the formant ratio now!
+        const formratio = ffreq2 / freq2;
+        k = Math.floor(formratio);
+        q = formratio - k;
+      }
+      const carrier = (1 - q) * Math.cos(k * phase) + q * Math.cos((k + 1) * phase);
+
+      const bw2 = bwsmoo.update(bw);
+      const b = bw2 / freq2;
+      const a = 0.5 * b * b;
+      const modulator = 1 / (1 + a * (1 - Math.cos(phase)));
+      const amp = ampsmoo.update(dbamp(ampdb));
+      const env = envelope(attack, decay, sustain, release, duration, t);
+      const value = 0.3 * carrier * modulator * amp * env;
+      data[0][s] += value;
+      data[1][s] += value;
+      s++;
     }
   }
 }
 
-function render(): void {
-  ctx.fillStyle = '#111';
-  ctx.fillRect(0, 0, WIDTH, HEIGHT);
+// Tenor part
 
-  for (const entity of entities) {
-    ctx.drawImage(image, entity.entityType * 8, 0, 8, 8, entity.x | 0, entity.y | 0, 8, 8);
-  }
-
-  ctx.fillStyle = '#fff';
-  ctx.font = '10px sans-serif';
-  ctx.fillText('Health: ' + player.health, 0.5, 8.5);
-  ctx.fillText('Score: ' + score, 0.5, 20.5);
-  ctx.fillText('Arrow keys or WASD to move', 0.5, 116.5);
-  ctx.fillText('Left click to shoot', 0.5, 128.5);
+for (let ns = 0; ns < 5; ns++) {
+  playFormant(ns);
 }
 
-const distance = (a: Entity, b: Entity): number => Math.hypot(a.x - b.x, a.y - b.y);
+// Bass part
 
-window.setInterval(gameLoop, MILLIS_PER_FRAME);
+function tri(t: number): number {
+  return -1 + 4 * Math.abs((t % 1) - 0.5);
+}
 
-// Set an OS13k trophy
-localStorage['OS13kTrophy,🤗,js13k-starter-2022'] = 'tada';
+function playVarsaw(start: number, decay: number, duration: number, note: number, pan: number): void {
+  const attack = 0.2;
+  const sustain = 0.8;
+  const release = 1.0;
+  const amp = 2 ** ((48 - note) / 24);
+  const freq = midi_to_hz(note);
+  const end = ((start + duration + release) * sampleRate) | 0;
+  let i = (start * sampleRate) | 0;
+  let phase = 0;
+
+  while (i < end) {
+    const t = Math.max(0, i / sampleRate - start);
+    phase += freq / sampleRate;
+    const x = phase % 1;
+    const env = envelope(attack, decay, sustain, release, duration, t);
+    const value = 0.3 * (x - 0.5) * clamp01(15 * x * (1 - x) * (1 + 0.1 * tri(phase))) * env * amp;
+    data[0][i] += (0.7 - 0.5 * pan) * value;
+    data[1][i] += (0.7 + 0.5 * pan) * value;
+    i++;
+  }
+}
+
+function playVarsawNotes(notes: number[], durations: number[], pan: number): void {
+  let t = 0;
+  for (let i = 0; t < totalLengthInSeconds; i++) {
+    if (i < notes.length) {
+      if (notes[i]) {
+        playVarsaw(t, Math.min(1, durations[i] - 0.2), durations[i], notes[i], pan);
+      }
+      t += durations[i];
+    } else {
+      t++;
+    }
+  }
+}
+
+function playVarsawChords(chords: number[][], durations: number[], pan: number): void {
+  let t = 0;
+  for (let i = 0; t < totalLengthInSeconds; i++) {
+    if (i < chords.length) {
+      for (let j = 0; j < chords[i].length; j++) {
+        playVarsaw(t, Math.min(1, durations[i] - 0.2), durations[i], chords[i][j], pan);
+      }
+      t += durations[i];
+    } else {
+      t++;
+    }
+  }
+}
+
+// Bass
+playVarsawNotes(bsnn, bsdur, 0.6);
+
+// Cello
+playVarsawNotes(clnn, cldur, 0.4);
+
+// Violins
+playVarsawChords(rhnn, rhdur, -0.3);
+
+// Viola
+playVarsawChords(innn, indur, -0.2);

@@ -37,7 +37,7 @@ export default defineConfig(({ command, mode }) => {
   if (command !== 'build') {
     return {
       server: {
-        port: 3000,
+        port: 13000,
       },
     };
   }
@@ -246,7 +246,7 @@ function ectPlugin(): Plugin {
     name: 'vite:ect',
     writeBundle: async (): Promise<void> => {
       try {
-        const args = ['-strip', '-zip', '-10009', 'dist/index.html', 'dist/i.png'];
+        const args = ['-strip', '-zip', '-10009', 'dist/index.html'];
         const result = execFileSync(ect, args);
         console.log('ECT result', result.toString().trim());
         const stats = statSync('dist/index.zip');
