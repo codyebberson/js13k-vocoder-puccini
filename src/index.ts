@@ -89,15 +89,6 @@ function playFormant(ns: number): void {
   for (let i = 0; i < nn.length; i++) {
     nn2 = nn[i];
     if (vowels[i] !== 'r') {
-      if (!vowels[i]) {
-        console.log('CODY missing vowels[i]');
-      }
-      if (!table[vowels[i]]) {
-        console.log('CODY missing table[vowels[i]]', i, vowels[i]);
-      }
-      if (!table[vowels[i]].freq) {
-        console.log('CODY missing table[vowels[i]].freq');
-      }
       ffreq = table[vowels[i]].freq[ns];
       bw = table[vowels[i]].bw[ns];
     }
