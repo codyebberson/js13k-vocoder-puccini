@@ -2,12 +2,6 @@
 
 [Live demo](https://cody.ebberson.com/js13k-vocoder-puccini/index.html)
 
-Prerecorded:
-
-https://user-images.githubusercontent.com/749094/219980260-24e63e94-8f46-4e21-bf18-53d22130b1a1.mp4
-
-(Cover art by [MidJourney](https://midjourney.com/))
-
 ## What is this?
 
 Highly compressed version of [Vocoder Puccini](https://dittytoy.net/ditty/6f30b0885d) by [athibaul](https://dittytoy.net/user/athibaul).
